@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/micro/go-micro/v2/config"
 	"github.com/micro/go-micro/v2/config/source/file"
@@ -85,7 +87,45 @@ func loadAndWatchConfigFile() (err error) {
 
 
 	watcher, err := config.Watch()
+	if err != nil {
+		log.Fatalf("[loadAndWatchConfigFile] 开始侦听应用配置文件变动 异常，%s", err)
+		return err
+	}
 
-	
+	go func() {
+		for {
+			v, err := watcher.Next()
+			if err != nil {
+				log.Fatalf("[loadAndWatchConfigFile] 侦听应用配置文件变动 异常， %s", err)
+				return
+			}
 
+			log.Logf("[loadAndWatchConfigFile] 文件变动，%s", string(v.Bytes()))
+		}
+	}()
+
+	return
+}
+
+func getConfig(appName string) *proto.ChangeSet {
+	bytes := config.Get(appName).Bytes()
+
+	log.Logf("appName:%s", appName)
+	return &proto.ChangeSet{
+		Data:bytes,
+		Checksum:fmt.Sprintf("%x", md5.Sum(bytes)),
+		Format:"yml",
+		Source:"file",
+		Timestamp: time.Now().Unix()
+	}
+}
+
+func parsePath(path string) (appName string) {
+	paths := strings.Split(path, "/")
+
+	if paths[0] == "" && len(paths) > 1 {
+		return paths[1]
+	}
+
+	return paths[0]
 }
