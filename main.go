@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -17,7 +19,7 @@ import (
 var (
 	mux        sync.RWMutex
 	configMaps = make(map[string]*proto.ChangeSet)
-	apps       = []string("micro")
+	apps       = []string{"micro"}
 )
 
 type Service struct{}
@@ -43,7 +45,7 @@ func main() {
 
 	log.Logf("configServer started")
 
-	err = service.Server(ts)
+	err = service.Serve(ts)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,15 +55,15 @@ func (s Service) Read(ctx context.Context, req *proto.ReadRequest) (rsp *proto.R
 	appName := parsePath(req.Path)
 
 	rsp = &proto.ReadResponse{
-		ChangeSet: getConfig(appName)
+		ChangeSet: getConfig(appName),
 	}
 	return
 }
 
 func (s Service) Watch(req *proto.WatchRequest, server proto.Source_WatchServer) (err error) {
 	appName := parsePath(req.Path)
-	rsp := &proto.WatchReponse{
-		ChangeSet:getConfig(appName)
+	rsp := &proto.WatchResponse{
+		ChangeSet: getConfig(appName),
 	}
 
 	if err = server.Send(rsp); err != nil {
@@ -72,19 +74,16 @@ func (s Service) Watch(req *proto.WatchRequest, server proto.Source_WatchServer)
 	return
 }
 
-
 func loadAndWatchConfigFile() (err error) {
 
-	for _,app := range apps {
+	for _, app := range apps {
 		if err := config.Load(file.NewSource(
-			file.WithPath("./conf" + app + ".yml")
+			file.WithPath("./conf/" + app + ".yml"),
 		)); err != nil {
 			log.Fatal("加载应用配置文件异常 %s", err)
 			return err
 		}
 	}
-
-
 
 	watcher, err := config.Watch()
 	if err != nil {
@@ -112,11 +111,11 @@ func getConfig(appName string) *proto.ChangeSet {
 
 	log.Logf("appName:%s", appName)
 	return &proto.ChangeSet{
-		Data:bytes,
-		Checksum:fmt.Sprintf("%x", md5.Sum(bytes)),
-		Format:"yml",
-		Source:"file",
-		Timestamp: time.Now().Unix()
+		Data:      bytes,
+		Checksum:  fmt.Sprintf("%x", md5.Sum(bytes)),
+		Format:    "yml",
+		Source:    "file",
+		Timestamp: time.Now().Unix(),
 	}
 }
 
